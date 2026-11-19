@@ -13,11 +13,16 @@ settings, the results panel, Automate lists) serves every plugin here.
 | Folder | Plugin | Tool it runs | Tag | MobileRead thread |
 |---|---|---|---|---|
 | `epubveri/` | epubveri for Sigil | [epubveri](https://github.com/veripublica/epubveri), an EPUB validator | `epubveri-vX.Y.Z` | 374939 |
+| `kepubverto/` | kepubverto for Sigil | [kepubverto](https://github.com/veripublica/kepubverto), EPUB to KEPUB for Kobo | `kepubverto-vX.Y.Z` | not yet |
 
 epubveri for Sigil moved here from
 [epubveri-plugins](https://github.com/veripublica/epubveri-plugins) at 0.3.5.
 Its releases up to 0.3.4 (tags `sigil-v…`) and its history stay there.
-Plugins for kepubverto and epubsana are planned.
+A plugin for epubsana (an edit plugin, since it repairs the book) is planned.
+
+Each plugin's type follows what its tool does to the book: a validator is a
+`validation` plugin, a converter that writes a new file is an `output`
+plugin, and a tool that changes the book itself is an `edit` plugin.
 
 What a plugin here does not do:
 
@@ -161,6 +166,7 @@ taking the version from `plugin.xml`.
 
 ```
 LICENSE  README.md  AGENTS.md  latest.json
+kepubverto/           see "kepubverto for Sigil"
 epubveri/
   plugin.xml          name, version, type, engine, oslist
   plugin.py           run(bk): binary, validation, panel rows, summary
@@ -196,13 +202,96 @@ EPUBVERI_BINARY=$(which epubveri) python3 -m unittest discover -s epubveri/tests
   only be judged in Sigil. The last check was on Sigil 2.8.6 (macOS, bundled
   Python 3.14 with PySide6).
 
+## kepubverto for Sigil
+
+An output plugin (`<type>output</type>`, `<autostart>true</autostart>`). It
+never changes the book in Sigil, and never writes over the book's own file
+(`get_epub_filepath()`), whatever the user types.
+
+### Flow
+
+1. Ensure the binary, exactly as epubveri for Sigil does:
+   - `kepubverto-<target triple>.tar.gz` or `.zip` from
+     `https://github.com/veripublica/kepubverto/releases/latest/download/`;
+   - checked against `SHA256SUMS.txt`, and re-checked before every run;
+   - an hourly update check, which also reads `latest.json`;
+   - kepubverto 0.3.0 or newer, the first with the JSON report read here.
+2. Ask, in one window (`client/ui.py`), where to save and how to hyphenate.
+   - The default is `<last folder or the book's folder>/<book stem>.kepub.epub`.
+   - Choosing the open book's file is refused; an existing file is replaced
+     only after a yes.
+   - In an Automate list (`bk.using_automate()`), or when no Qt binding is
+     importable, there is no window. The target is
+     `<book folder>/<book stem>.kepub.epub`, and the step fails (prints the
+     reason, returns non-zero) when that file exists, when the book was never
+     saved, or when the target would be the book itself.
+3. Write the book with `copy_book_contents_to` into a temporary folder,
+   `mimetype` first and stored, and run:
+
+   ```
+   kepubverto -i current.epub -o out.kepub.epub --format json [--hyphens auto|none] [--css …]
+   ```
+
+   `-f` is never passed: the output is always a fresh path. Only a finished
+   KEPUB is moved to the target; the temporary folder is always removed.
+4. Report, from the envelope's `summary` and `items`:
+   - converted and total documents, spans added;
+   - each document left as it was, with its path, reason and code;
+   - "already carries Kobo's markup" when nothing was converted and
+     documents were already converted;
+   - kepubverto's refusal (stderr, no envelope), for example of `--css`.
+
+   The result goes to a window with Show in folder, and as one
+   `kepubverto: …` line on standard output, which Sigil keeps in the Plugin
+   Runner log. kepubverto's exit 1 (written, some documents left alone) is
+   a success for Sigil; a refusal or an unreadable book is a failure.
+5. The newer-plugin notice, as in epubveri for Sigil, under the key
+   `kepubverto` in `latest.json`.
+
+### Settings
+
+`<Sigil preferences>/plugins_prefs/kepubverto/kepubverto.json`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `autoupdate` | `true` | Any network use; only `true`, `yes`, `on`, `1` and `y` mean on |
+| `hyphens` | `book` | `book` (pass nothing), `auto` or `none`; the window's last choice; an unknown word means `book` |
+| `css` | `[]` | A list of strings, or one string, each passed as `--css` |
+| `last_folder` | none | The folder last saved to |
+
+The bookkeeping keys are epubveri for Sigil's, with the same names.
+
+### Layout and tests
+
+```
+kepubverto/
+  plugin.xml  plugin.py  icon.py  plugin.svg  plugin.png  build.py
+  client/
+    binary.py  plugin_release.py  release_dialog.py   copies of epubveri for Sigil's
+    envelope.py  runner.py                            copies of kepubverto for calibre's
+    ui.py                                             the options and result windows
+  tests/
+    test_plugin.py    plugin.run against a fake output container; windows replaced
+    test_in_sigil.py  the Automate path through Sigil's own launcher.py
+```
+
+```sh
+KEPUBVERTO_BINARY=/path/to/kepubverto python3 -m unittest discover -s kepubverto/tests
+```
+
+37 tests at 0.1.0. Without a binary, the conversion tests skip. The windows
+can only be judged in Sigil.
+
+The icon is epubveri for Sigil's sheet with kepubverto for calibre's k (KF
+Libron Bold, OFL 1.1, kept as outline data) in place of the tick.
+
 ## Releasing
 
 Each plugin is released on its own. There are no workflows; the tag and the
 GitHub release are made by hand.
 
-1. Bump the version in `<plugin>/plugin.xml` and in `latest.json`, in the
-   same commit. A test fails if they differ.
+1. Bump the version in `<plugin>/plugin.xml` and in that plugin's entry in
+   `latest.json`, in the same commit. A test fails if they differ.
 2. In `<plugin>/CHANGELOG.md`, turn `## [Unreleased]` into
    `## [X.Y.Z] — YYYY-MM-DD`.
 3. Run the tests, build, and check the zip with `unzip -l`. Write a one-line
@@ -210,7 +299,7 @@ GitHub release are made by hand.
 4. Commit `Release <plugin title> X.Y.Z`, tag `<plugin>-vX.Y.Z`, push both.
 5. Create the GitHub release **straight after the push**: `latest.json` on
    `main` is live as soon as it is pushed, and a notice must not point at a
-   page that does not exist yet. The title is `epubveri for Sigil X.Y.Z`, the
+   page that does not exist yet. The title is `<plugin title> X.Y.Z`, the
    notes are that version's CHANGELOG section, and the assets are the zip and
    `SHA256SUMS.txt`.
 6. Download the assets and check them against `SHA256SUMS.txt`, and read

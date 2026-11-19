@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin>
+<name>kepubverto</name>
+<type>output</type>
+<author>Baris Kayadelen (veripublica)</author>
+<description>Convert the current book to a KEPUB for Kobo e-readers with kepubverto. The book in Sigil is not changed.</description>
+<autostart>true</autostart>
+<engine>python3.4</engine>
+<version>0.1.0</version>
+<oslist>unx,win,osx</oslist>
+</plugin>
