@@ -408,9 +408,16 @@ GitHub release are made by hand.
 4. Commit `Release <plugin title> X.Y.Z`, tag `<plugin>-vX.Y.Z`, push both.
 5. Create the GitHub release **straight after the push**: `latest.json` on
    `main` is live as soon as it is pushed, and a notice must not point at a
-   page that does not exist yet. The title is `<plugin title> X.Y.Z`, the
-   notes are that version's CHANGELOG section, and the assets are the zip and
-   `SHA256SUMS.txt`.
+   page that does not exist yet. The title is `<plugin title> X.Y.Z`, and the
+   assets are the zip and `SHA256SUMS.txt`. The notes start with this line, a
+   blank line, then that version's CHANGELOG section:
+
+   ```
+   This repository holds three Sigil plugins. The [download table in the README](https://github.com/veripublica/sigil-plugins#download) links the latest release of each one.
+   ```
+
+   The Releases page mixes the plugins and marks one "Latest" for the whole
+   repository, so the line sends anyone who lands there to the table.
 6. Download the assets and check them against `SHA256SUMS.txt`, and read
    `latest.json` from raw.githubusercontent.com.
 
