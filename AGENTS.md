@@ -13,7 +13,7 @@ settings, the results panel, Automate lists) serves every plugin here.
 | Folder | Plugin | Tool it runs | Tag | MobileRead thread |
 |---|---|---|---|---|
 | `epubveri/` | epubveri for Sigil | [epubveri](https://github.com/veripublica/epubveri), an EPUB validator | `epubveri-vX.Y.Z` | 374939 |
-| `kepubverto/` | kepubverto for Sigil | [kepubverto](https://github.com/veripublica/kepubverto), EPUB to KEPUB for Kobo | `kepubverto-vX.Y.Z` | not yet |
+| `kepubverto/` | kepubverto for Sigil | [kepubverto](https://github.com/veripublica/kepubverto), EPUB to KEPUB for Kobo | `kepubverto-vX.Y.Z` | 376360 |
 
 epubveri for Sigil moved here from
 [epubveri-plugins](https://github.com/veripublica/epubveri-plugins) at 0.3.5.
