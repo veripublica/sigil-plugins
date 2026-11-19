@@ -1,30 +1,33 @@
 # sigil-plugins
 
-Sigil plugins for the veripublica EPUB tools, in one repository: what is
-learned about Sigil once (its plugin API, packaging, icons, settings) serves
-every tool's plugin, and a change in Sigil is followed in one pass.
+These are the Sigil plugins for my EPUB tools. If you edit books in
+[Sigil](https://sigil-ebook.com/), a plugin here lets you run one of the tools
+on the book you have open, without leaving the editor.
 
-**Status:** being set up. The epubveri plugin for Sigil moves here from
-[epubveri-plugins](https://github.com/veripublica/epubveri-plugins), unchanged
-for its users; plugins for the other tools follow.
+For now there is one plugin, epubveri for Sigil. It checks the book against
+the EPUB specification with [epubveri](https://github.com/veripublica/epubveri)
+and puts what it finds in Sigil's validation panel, where a click takes you to
+the line. It changes nothing in the book. Plugins for my other tools will join
+it here.
 
-## How the plugins work
+To install it, download `epubveri_sigil_vX.Y.Z.zip` from
+[Releases](https://github.com/veripublica/sigil-plugins/releases) and add it
+in Sigil with Plugins, Manage Plugins, Add Plugin. Please keep the file name
+as it is, because Sigil reads the plugin's name from it. On first use the
+plugin downloads epubveri itself, checks it, and keeps it up to date. When a
+new version of the plugin is out, it tells you.
 
-A plugin does not contain the tool it runs. On the user's machine it downloads
-the tool's binary from that tool's GitHub release, verifies it against the
-release's `SHA256SUMS.txt`, and runs it as a separate program, reading its
-JSON report. No tool code is linked into a plugin, and no binary is shipped in
-a plugin package.
-
-## Licence
-
-GPL-3.0-only, everywhere in this repository ([LICENSE](LICENSE)). Each source
-file says so in its header:
+After a run, the last line in the panel tells you the verdict, for example:
 
 ```
-SPDX-License-Identifier: GPL-3.0-only
+epubveri 0.47.0 (plugin 0.3.5) — NOT VALID (2 error(s), 0 warning(s))
 ```
 
-The tools the plugins run are licensed separately (AGPL-3.0-only or a
-commercial licence); because a plugin only runs a tool as a separate program
-and ships none of it, a plugin package carries none of the tools' code.
+The plugin's own [README](epubveri/README.md) explains its settings and what
+the report means. [AGENTS.md](AGENTS.md) has the technical detail. You can
+report problems in [Issues](https://github.com/veripublica/sigil-plugins/issues),
+and in the [MobileRead thread](https://www.mobileread.com/forums/showthread.php?t=374939).
+
+The plugins are GPL-3.0-only ([LICENSE](LICENSE)). The tools they run are
+licensed separately. A plugin only runs its tool as a separate program and
+ships none of it.
