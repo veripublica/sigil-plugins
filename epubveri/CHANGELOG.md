@@ -3,6 +3,15 @@
 This plugin is versioned independently of the calibre plugin and of epubveri
 itself. The version Sigil shows comes from `plugin.xml`.
 
+## [0.3.6] — 2026-11-19
+
+- **The summary line is the first row of the results**, where you look, and
+  not the last. With many findings it was easy to miss at the bottom.
+- **A clean book gets its summary line too**, when you run the plugin
+  yourself: "VALID (0 error(s), 0 warning(s))" with both versions, instead
+  of Sigil's "No Problems Found". In an Automate list a clean book still adds
+  no line, so the list does not stop.
+
 ## [0.3.5] — 2026-11-19
 
 - **The plugin now tells you when a newer version of itself is out.** In the

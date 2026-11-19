@@ -283,8 +283,8 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(summary[0].get("bookpath"), " ")
         self.assertEqual(summary[0].get("charoffset"), "-1")
         self.assertIn("epubveri", summary[0].get("message"))
-        self.assertEqual(rows[-1].get("linenumber"), "-1",
-                         "the summary belongs last, after the findings")
+        self.assertEqual(rows[0].get("linenumber"), "-1",
+                         "the summary goes first, where a reader looks (0.3.6)")
 
     def test_the_display_settings_are_written_on_the_first_run(self):
         for key in ("show_usage", "show_advisory", "show_summary", "sort"):

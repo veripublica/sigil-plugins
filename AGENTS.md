@@ -14,7 +14,7 @@ settings, the results panel, Automate lists) serves every plugin here.
 |---|---|---|---|---|
 | `epubveri/` | epubveri for Sigil | [epubveri](https://github.com/veripublica/epubveri), an EPUB validator | `epubveri-vX.Y.Z` | 374939 |
 | `kepubverto/` | kepubverto for Sigil | [kepubverto](https://github.com/veripublica/kepubverto), EPUB to KEPUB for Kobo | `kepubverto-vX.Y.Z` | 376360 |
-| `epubsana/` | epubsana for Sigil | [epubsana](https://github.com/veripublica/epubsana), an EPUB repairer | `epubsana-vX.Y.Z` | not yet |
+| `epubsana/` | epubsana for Sigil | [epubsana](https://github.com/veripublica/epubsana), an EPUB repairer | `epubsana-vX.Y.Z` | 376361 |
 
 epubveri for Sigil moved here from
 [epubveri-plugins](https://github.com/veripublica/epubveri-plugins) at 0.3.5.
@@ -61,10 +61,11 @@ the contract, not epubveri's current output.
   CR stripped). The message starts with epubveri's own label: `ERROR`,
   `WARNING`, `USAGE` or `ADVISORY`.
 - **Summary line:** It names both versions, for example
-  `epubveri 0.47.0 (plugin 0.3.5) — NOT VALID (…)`. It is added as a row only
-  when the book has other findings, because any row makes Sigil's Automate
-  lists abort. On a clean book it is printed instead, and Sigil shows "No
-  Problems Found".
+  `epubveri 0.47.0 (plugin 0.3.6) — NOT VALID (…)`, and is the **first** row:
+  Sigil shows rows in the order they are added. It is left out (printed
+  instead) only for a clean book in an Automate list (`bk.using_automate()`),
+  because any row makes a list abort. Run by hand, a clean book gets it too.
+  Since 0.3.6; before, it went last and never on a clean book.
 - **Failures:** A failure is printed and the plugin returns non-zero. Sigil
   discards result rows on a non-zero return.
 

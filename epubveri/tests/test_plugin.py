@@ -1079,7 +1079,7 @@ class DisplaySettingsTests(unittest.TestCase):
         self.assertTrue(texts, "the findings went with the summary")
         self.assertNotIn("epubveri ", self.out)
 
-    def test_a_clean_book_leaves_the_results_table_empty(self):
+    def test_in_an_automate_list_a_clean_book_leaves_the_table_empty(self):
         """The one that matters to an automation list, and the regression
         this whole shape exists to prevent.
 
@@ -1092,12 +1092,35 @@ class DisplaySettingsTests(unittest.TestCase):
         MobileRead 374939 #23 and #29, confirmed by BeckyEbook in #28 by
         removing the line.
         """
-        _bk, texts = self._run(bk=CleanBk({"show_usage": False,
-                                           "show_advisory": False}))
+        bk = CleanBk({"show_usage": False, "show_advisory": False})
+        bk.using_automate = lambda: True
+        _bk, texts = self._run(bk=bk)
         self.assertEqual(texts, [], "an automation list would abort on these")
         # With nothing to sit beside it goes to the one channel left.
         self.assertIn("VALID", self.out)
         self.assertIn("hidden by your settings", self.out)
+
+    def test_run_by_hand_a_clean_book_gets_its_summary_row(self):
+        """0.3.6: outside an Automate list nothing aborts, and "VALID (0
+        error(s), …)" with both versions says more than Sigil's "No Problems
+        Found". Asked for by Baris, who could not tell how many findings were
+        left without scrolling."""
+        bk = CleanBk({"show_usage": False, "show_advisory": False})
+        bk.using_automate = lambda: False
+        _bk, texts = self._run(bk=bk)
+        self.assertEqual(len(texts), 1, texts)
+        self.assertTrue(texts[0].startswith("epubveri "), texts)
+        self.assertIn("— VALID", texts[0])
+        self.assertNotIn("epubveri ", self.out, "it went to the table")
+
+    def test_the_summary_is_the_first_row(self):
+        """Sigil shows rows in the order they are added, and a reader looks
+        at the top."""
+        _bk, texts = self._run({})
+        self.assertTrue(len(texts) > 1)
+        self.assertTrue(texts[0].startswith("epubveri "), texts[:2])
+        self.assertEqual(len([t for t in texts if t.startswith("epubveri ")]),
+                         1)
 
     def test_the_summary_rides_with_the_findings_when_there_are_any(self):
         """Where a reader is actually looking.

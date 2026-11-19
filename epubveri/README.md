@@ -80,9 +80,9 @@ rebuild. Sigil's maintainer is looking at whether the two ought to line up
 (MobileRead thread 374939); if they come to, this note goes away. Everything
 else in the book, and an OPF you have not edited, matches exactly.
 
-The last line of every run is a summary: which version validated the book, the
-verdict, and — when there are any — how many usage notes and advisory findings
-are in the list above it, neither of which decides the verdict.
+The first line of every run is a summary: which version validated the book,
+the verdict, and — when there are any — how many usage notes and advisory
+findings are in the list below it, neither of which decides the verdict.
 
 ```
 epubveri 0.15.0 (plugin 0.3.3) — NOT VALID (2 error(s), 0 warning(s));
@@ -196,16 +196,15 @@ where anything unclear is read as *no*: there the switch spends your
 connection, so a misread must not use it; here the switch hides findings, so a
 misread must not hide them.
 
-**The summary appears when there is something for it to summarise.** On a
-book with findings it is the last line of the results; on a clean book there
-is no line, and Sigil says "Validation Tool Reported No Problems Found" by
-itself.
+**The summary is the first line of the results**, on a clean book too:
+`epubveri 0.47.0 (plugin 0.3.6) — VALID (0 error(s), 0 warning(s))`.
 
-That is not cosmetic. A validation result is how Sigil is told the book has a
-problem, so an **automation list** aborts on any of them — a summary line on a
-clean book would stop every list this plugin is in. When there are real
-findings the list was going to stop anyway, so the line costs nothing there.
-`show_summary: false` removes it in both cases.
+**The one exception is a clean book in an Automate list.** A validation
+result is how Sigil is told the book has a problem, so an Automate list stops
+on any of them, a summary included. In a list, a clean book therefore adds no
+line, and the list carries on. When there are real findings the list was
+going to stop anyway, so the line is there. `show_summary: false` removes it
+everywhere.
 
 ## If something goes wrong
 

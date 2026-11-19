@@ -20,10 +20,10 @@ as it is, because Sigil reads the plugin's name from it. On first use a
 plugin downloads its tool itself, checks it, and keeps it up to date. When a
 new version of the plugin is out, it tells you.
 
-After a run, the last line in the panel tells you the verdict, for example:
+After a run, the first line in the panel tells you the verdict, for example:
 
 ```
-epubveri 0.47.0 (plugin 0.3.5) — NOT VALID (2 error(s), 0 warning(s))
+epubveri 0.47.0 (plugin 0.3.6) — NOT VALID (2 error(s), 0 warning(s))
 ```
 
 Each plugin's own README ([epubveri](epubveri/README.md),

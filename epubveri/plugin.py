@@ -824,6 +824,33 @@ def _fail(bk, message):
     return -1
 
 
+class _Rows(object):
+    """Hold the finding rows back, so the summary can go in front of them.
+
+    Sigil's panel shows rows in the order a plugin adds them, and the summary
+    has to be decided after the findings are counted. Everything that is not
+    a row passes straight through to the container.
+    """
+
+    def __init__(self, bk):
+        self._bk = bk
+        self._rows = []
+
+    def add_result(self, *args):
+        self._rows.append(("add_result", args))
+
+    def add_extended_result(self, *args):
+        self._rows.append(("add_extended_result", args))
+
+    def replay(self):
+        for name, args in self._rows:
+            getattr(self._bk, name)(*args)
+        self._rows = []
+
+    def __getattr__(self, name):
+        return getattr(self._bk, name)
+
+
 def _report(bk, envelope, workdir, show, order=_SORT_DEFAULT):
     """Put the findings into Sigil's validation panel.
 
@@ -912,7 +939,8 @@ def run(bk):
             return _fail(bk, "epubveri could not read the book: %s"
                          % (envelope.error or "no reason given"))
 
-        counts = _report(bk, envelope, workdir, show, order)
+        rows = _Rows(bk)
+        counts = _report(rows, envelope, workdir, show, order)
         verdict = "VALID" if envelope.is_valid else "NOT VALID"
         # The verdict line quotes only errors and fatals, because that is what
         # decides it and what epubcheck would print. Usage notes and
@@ -955,7 +983,15 @@ def run(bk):
             summary += " [%s]" % update_note
         if release_note:
             summary += " [%s]" % release_note
-        # **The summary is a result only when there is another one.**
+        # **The summary goes first, and it is a result unless an Automate
+        # list is running a clean book.** (0.3.6; before, it went last, and
+        # only beside other rows.)
+        #
+        # First, because a reader looks at the top of the panel, and Sigil
+        # shows rows in the order they are added; Baris found the line only
+        # by scrolling to the bottom of 75 findings.
+        #
+        # The rest of this comment is the history of the second half.
         #
         # A validation result is not a neutral place to put a sentence: it is
         # how Sigil is told the book has a problem. `Automation` has three
@@ -987,11 +1023,20 @@ def run(bk):
         # guess about Sigil's interface rather than a check: that an empty
         # panel is silent (it is not), and that the output window is somewhere
         # a reader will look (it is not shown at all).
+        #
+        # **0.3.6 narrows the silence to where it is needed.** The abort is a
+        # property of Automate lists, and a Sigil that has them lets a plugin
+        # ask whether it is in one (`bk.using_automate()`; `_in_automation`
+        # treats a Sigil without the call as having no lists). Run by hand, a clean
+        # book now gets its summary row too: "VALID (0 error(s), …)" says
+        # more than "No Problems Found" and names both versions. In an
+        # Automate list a clean book still adds nothing.
         if show["summary"]:
-            if counts["shown"]:
+            if counts["shown"] or not _in_automation(bk):
                 bk.add_result("info", _NO_FILE, -1, _xml_attr(summary))
             else:
                 print(summary)
+        rows.replay()
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
     # After the report, so nothing about the window can delay or touch the
