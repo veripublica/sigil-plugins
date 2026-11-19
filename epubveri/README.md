@@ -48,6 +48,23 @@ Why it bothers: epubveri ships often, and almost every recent release fixed a
 *wrong* error on a valid book. An old copy is one that keeps telling you
 something untrue.
 
+**The plugin itself does not update itself, but it tells you when a new one
+is out.** In the same hourly check, once epubveri's answer has come back, it
+reads a small file in this repository, `latest.json`, which names the newest
+release of each plugin here. If that is newer than the plugin you have, a
+window opens once Sigil has shown the results, at most once a day: **Download** opens the
+release page in your browser, **Ignore this version** stops asking about that
+release (a later one is offered again), and **Not now** asks again tomorrow.
+The summary line also ends with *"epubveri for Sigil 0.3.6 is available"* and
+the release page's address on every run, until you install it or ignore that
+release. No window opens while an Automate list is running, since it would
+stop the list, nor when Sigil's Python has no Qt (some Linux setups); the
+summary line is then the only notice. Installing is still yours to do,
+the same way as the first time. Replacing its own code while Sigil is running
+it is not something a plugin should do behind your back; replacing the
+epubveri binary is different, because that is a separate program checked
+against its release's checksums.
+
 ## What you will see
 
 Findings land in Sigil's validation panel under **File**, **Line** and
@@ -138,7 +155,7 @@ the file shows you which choices exist:
 | `show_usage` | `USAGE` lines are not listed |
 | `show_advisory` | `ADVISORY` lines are not listed |
 | `show_summary` | no summary line, ever |
-| `autoupdate` | nothing is ever requested over the network |
+| `autoupdate` | nothing is ever requested over the network: no epubveri update, no check for a newer plugin |
 
 `sort` takes a word rather than a switch:
 

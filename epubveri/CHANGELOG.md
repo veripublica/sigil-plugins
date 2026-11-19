@@ -3,14 +3,29 @@
 This plugin is versioned independently of the calibre plugin and of epubveri
 itself. The version Sigil shows comes from `plugin.xml`.
 
-## [Unreleased]
+## [0.3.5] — 2026-11-19
 
+- **The plugin now tells you when a newer version of itself is out.** In the
+  hourly check it already makes for epubveri, it also reads the repository's
+  `latest.json`, a few dozen bytes naming the newest release of each plugin.
+  If yours is older, a window opens once Sigil has shown the results, at
+  most once a day, with **Download** (opens the release page), **Ignore this version**
+  and **Not now**. The summary line also ends with "epubveri for Sigil
+  X.Y.Z is available" and the link. No window opens inside an Automate list,
+  or where Sigil's Python has no Qt. Nothing is installed for you: you add
+  the new zip in Sigil yourself, as before. With
+  `"autoupdate": false` nothing is asked, as before. An offline machine still
+  makes one failed request an hour, not two, because the plugin check waits
+  for epubveri's to answer.
 - The plugin's source moved from `veripublica/epubveri-plugins` to
   `veripublica/sigil-plugins`, which holds the Sigil plugins for all the
   veripublica tools. Nothing changes for you: the plugin's name, its settings
   and the zip name stay the same, and the version continues from 0.3.4.
   Releases and issues are now in the new repository; tags there are
-  `epubveri-vX.Y.Z`.
+  `epubveri-vX.Y.Z`. 0.3.4 keeps working, but it cannot tell you about later
+  releases; from 0.3.5 on, the plugin does.
+- The plugin now tells GitHub it is `sigil-plugins` when it downloads
+  epubveri, instead of `epubveri-plugins`.
 - Every source file now says `GPL-3.0-only` in its header, as the README
   always did. Before, the headers said "or any later version".
 

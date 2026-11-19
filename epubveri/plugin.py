@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from client import binary as bin_mod          # noqa: E402
+from client import plugin_release             # noqa: E402
+from client import release_dialog             # noqa: E402
 from client import runner                     # noqa: E402
 from client.envelope import EnvelopeError     # noqa: E402
 
@@ -208,6 +210,21 @@ _UPDATE_INTERVAL = timedelta(hours=1)
 #: when a finding looks wrong. Thirty days, so a fortnight offline says
 #: nothing.
 _STALE_AFTER = timedelta(days=30)
+
+#: Where the hourly check stores the newest plugin version it has seen, so
+#: that every run can mention it without asking the network again.
+_LATEST_PLUGIN_KEY = "latest_plugin_version"
+
+#: A release the user chose to ignore: no window and no summary note for it.
+#: A later release is offered again.
+_IGNORED_PLUGIN_KEY = "ignored_plugin_version"
+
+#: When the window was last shown. **At most once a day**, not on every run:
+#: a validation is something people do many times an hour, and a window in
+#: front of each one would be the reason someone ignores every release. The
+#: summary line still says it on every run.
+_NOTICE_SHOWN_KEY = "plugin_notice_shown"
+_NOTICE_INTERVAL = timedelta(days=1)
 
 #: The check gets a short one of its own. It is optional work, so it must fail
 #: fast; the download that follows keeps the longer default because it is not.
@@ -506,6 +523,10 @@ def _ensure_binary(bk):
         wanted = sums.get(bin_mod.asset_name())
         prefs["last_update_success"] = prefs["last_update_check"]
         bk.savePrefs(prefs)
+        # Only once epubveri's own check has answered: the network is
+        # demonstrably there, so an offline machine still pays for one
+        # request an hour rather than two.
+        _check_plugin_release(bk, prefs)
         if wanted and wanted != prefs.get("installed_sha256"):
             before = runner.binary_version(path) or ""
             _p, archive_sha, binary_sha = bin_mod.download_binary(
@@ -518,6 +539,87 @@ def _ensure_binary(bk):
         # reason to refuse to validate the book in front of us.
         pass
     return path, _stale_note(prefs)
+
+
+def _check_plugin_release(bk, prefs):
+    """Record the newest released version of this plugin, if it can be read.
+
+    Never raises, and a failure leaves what was stored before: a check that
+    cannot answer must not take back a notice it gave earlier, nor stop the
+    binary update that follows it.
+    """
+    try:
+        latest = plugin_release.latest_version(timeout=_CHECK_TIMEOUT)
+    except Exception:                                  # noqa: BLE001
+        return
+    if latest:
+        prefs[_LATEST_PLUGIN_KEY] = latest
+        bk.savePrefs(prefs)
+
+
+def _plugin_release_note(prefs):
+    """"epubveri for Sigil 0.3.6 is available: <link>", or None.
+
+    Read from what the hourly check stored, so it costs nothing per run and
+    keeps appearing until the newer plugin is installed. It goes in the
+    summary line because that is the only place a plugin can speak: a result
+    row of its own would make a clean book abort Sigil's automation lists
+    (see `run`), and Sigil offers no other channel.
+    """
+    latest = prefs.get(_LATEST_PLUGIN_KEY)
+    if not plugin_release.is_newer(latest, _plugin_version()):
+        return None
+    if prefs.get(_IGNORED_PLUGIN_KEY) == latest:
+        return None
+    return "epubveri for Sigil %s is available: %s" % (
+        latest, plugin_release.release_page(latest))
+
+
+def _in_automation(bk):
+    """Is this run part of one of Sigil's Automate lists?
+
+    A window there would stop the list until someone clicked it. Sigils older
+    than the automation feature have no `using_automate`, and no lists either.
+    """
+    try:
+        return bool(bk.using_automate())
+    except Exception:                                  # noqa: BLE001
+        return False
+
+
+def _offer_plugin_release(bk):
+    """Start the newer-release window when there is something to show.
+
+    The window opens from a process of its own once this one has exited and
+    Sigil has shown the results (see `client/release_dialog.py`). The day's
+    showing is recorded here, before it starts, so a second validation while
+    the window is still open does not start another. "Ignore this version" is
+    recorded by that process.
+
+    Never raises: a window that cannot open is not a reason to lose the
+    validation that has just finished. Nothing is recorded when nothing was
+    started, so a Sigil without Qt keeps the summary note and nothing else.
+    """
+    prefs = bk.getPrefs()
+    if _plugin_release_note(prefs) is None or _in_automation(bk):
+        return
+    age = _since(prefs.get(_NOTICE_SHOWN_KEY))
+    if age is not None and age < _NOTICE_INTERVAL:
+        return
+    latest = prefs[_LATEST_PLUGIN_KEY]
+    try:
+        if not release_dialog.available():
+            return
+        # Sigil's settings object knows its own file; the helper process
+        # needs it to record "Ignore this version".
+        started = release_dialog.launch(
+            latest, _plugin_version(), plugin_release.release_page(latest),
+            getattr(prefs, "file_path", None))
+    except Exception:                                  # noqa: BLE001
+        return
+    if started:
+        prefs[_NOTICE_SHOWN_KEY] = _now().isoformat()
+        bk.savePrefs(prefs)
 
 
 def _update_note(before, after):
@@ -789,6 +891,7 @@ def run(bk):
     # update bookkeeping through its own copy.
     show = _display_prefs(bk, bk.getPrefs())
     order = _sort_order(bk, bk.getPrefs())
+    release_note = _plugin_release_note(bk.getPrefs())
 
     tmpdir = tempfile.mkdtemp(prefix="epubveri-sigil-")
     try:
@@ -850,6 +953,8 @@ def run(bk):
             summary += "; %s hidden by your settings" % ", ".join(hidden)
         if update_note:
             summary += " [%s]" % update_note
+        if release_note:
+            summary += " [%s]" % release_note
         # **The summary is a result only when there is another one.**
         #
         # A validation result is not a neutral place to put a sentence: it is
@@ -889,6 +994,9 @@ def run(bk):
                 print(summary)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+    # After the report, so nothing about the window can delay or touch the
+    # results. The window itself opens once this process has gone.
+    _offer_plugin_release(bk)
     return 0
 
 

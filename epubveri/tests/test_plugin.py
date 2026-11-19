@@ -34,6 +34,8 @@ sys.path.insert(0, PLUGIN_DIR)
 
 import plugin  # noqa: E402
 from client import binary as bin_mod  # noqa: E402
+from client import plugin_release  # noqa: E402
+from client import release_dialog  # noqa: E402
 from client import runner  # noqa: E402
 
 
@@ -441,12 +443,64 @@ class UpdateTests(unittest.TestCase):
     def setUp(self):
         self.downloads = []
         self._orig = (bin_mod.latest_checksums, bin_mod.download_binary,
-                      runner.binary_version, plugin._binary_path)
+                      runner.binary_version, plugin._binary_path,
+                      plugin_release.latest_version)
         plugin._binary_path = lambda: __file__      # any existing file
+        # The plugin-release check rides on the same hourly check, so every
+        # test here that makes the check due would otherwise reach GitHub.
+        self.release_checks = 0
+        self.latest_plugin = None
+        self.release_raises = None
+
+        def latest_version(timeout=None):
+            self.release_checks += 1
+            if self.release_raises:
+                raise self.release_raises
+            return self.latest_plugin
+        plugin_release.latest_version = latest_version
 
     def tearDown(self):
         (bin_mod.latest_checksums, bin_mod.download_binary,
-         runner.binary_version, plugin._binary_path) = self._orig
+         runner.binary_version, plugin._binary_path,
+         plugin_release.latest_version) = self._orig
+
+    def test_the_hourly_check_records_the_newest_plugin_release(self):
+        self._fake(remote=self.SHA_A)
+        self.latest_plugin = "0.9.0"
+        bk = FakeBk({"last_update_check": None, "installed_sha256": self.SHA_A})
+        plugin._ensure_binary(bk)
+        self.assertEqual(bk.prefs["latest_plugin_version"], "0.9.0")
+
+    def test_the_plugin_release_is_checked_with_the_binary_and_not_every_run(self):
+        self._fake(remote=self.SHA_A)
+        plugin._ensure_binary(FakeBk({"installed_sha256": self.SHA_A}))
+        self.assertEqual(self.release_checks, 0, "checked within the hour")
+
+    def test_offline_the_plugin_release_is_not_asked_for_at_all(self):
+        """A machine with no network pays for one failed request an hour,
+        not two: the plugin check waits for epubveri's to answer."""
+        self._fake(remote=self.SHA_B, check_raises=OSError("no network"))
+        plugin._ensure_binary(
+            FakeBk({"last_update_check": None, "installed_sha256": self.SHA_A}))
+        self.assertEqual(self.release_checks, 0)
+
+    def test_a_failed_plugin_check_keeps_the_old_answer_and_the_update(self):
+        self._fake(remote=self.SHA_B)
+        self.release_raises = OSError("raw.githubusercontent.com is down")
+        bk = FakeBk({"last_update_check": None, "installed_sha256": self.SHA_A,
+                     "latest_plugin_version": "0.9.0"})
+        path, note = plugin._ensure_binary(bk)
+        self.assertIsNotNone(path)
+        self.assertEqual(note, "updated epubveri 0.13.3 to 0.14.0",
+                         "the binary update must still happen")
+        self.assertEqual(bk.prefs["latest_plugin_version"], "0.9.0")
+
+    def test_no_plugin_check_when_updates_are_off(self):
+        self._fake(remote=self.SHA_B)
+        plugin._ensure_binary(FakeBk({"last_update_check": None,
+                                      "installed_sha256": self.SHA_A,
+                                      "autoupdate": False}))
+        self.assertEqual(self.release_checks, 0)
 
     def _fake(self, remote=SHA_A, check_raises=None, download_raises=None,
               versions=("epubveri 0.13.3", "epubveri 0.14.0")):
@@ -1185,6 +1239,332 @@ class PluginVersionTests(unittest.TestCase):
             self.assertIsNone(plugin._plugin_version())
         finally:
             plugin._plugin_dir = real
+
+
+class PluginReleaseTests(unittest.TestCase):
+    """The plugin says when a newer epubveri for Sigil is out; it never
+    installs one. The repository holds several plugins, so the answer comes
+    from `latest.json`, one entry per plugin, not from GitHub's latest
+    release."""
+
+    def test_versions_compare_as_numbers(self):
+        newer = plugin_release.is_newer
+        self.assertTrue(newer("0.3.6", "0.3.5"))
+        self.assertTrue(newer("0.10.0", "0.9.9"))
+        self.assertFalse(newer("0.3.5", "0.3.5"))
+        self.assertFalse(newer("0.3.4", "0.3.5"))
+        self.assertFalse(newer(None, "0.3.5"))
+        self.assertFalse(newer("0.3.6", None))
+        self.assertFalse(newer("soon", "0.3.5"))
+
+    def test_latest_json_is_read_strictly(self):
+        read = plugin_release.read_latest
+        self.assertEqual(read('{"epubveri": {"version": "0.4.0"}}'), "0.4.0")
+        # Another plugin's entry is not ours.
+        self.assertIsNone(read('{"kepubverto": {"version": "9.0.0"}}'))
+        # Anything but plain X.Y.Z is ignored: the version goes into a link.
+        for bad in ('{"epubveri": {"version": "0.4.0/../../evil"}}',
+                    '{"epubveri": {"version": 4}}',
+                    '{"epubveri": "0.4.0"}',
+                    '["epubveri"]',
+                    'not json',
+                    ''):
+            self.assertIsNone(read(bad), bad)
+
+    def test_the_link_is_this_repositorys_release_page(self):
+        self.assertEqual(
+            plugin_release.release_page("0.4.0"),
+            "https://github.com/veripublica/sigil-plugins/releases/tag/"
+            "epubveri-v0.4.0")
+
+    def test_the_note_names_a_newer_release_and_nothing_else(self):
+        current = plugin._plugin_version()
+        self.assertIsNone(plugin._plugin_release_note({}))
+        self.assertIsNone(plugin._plugin_release_note(
+            {"latest_plugin_version": current}))
+        note = plugin._plugin_release_note(
+            {"latest_plugin_version": "99.0.0"})
+        self.assertEqual(
+            note, "epubveri for Sigil 99.0.0 is available: "
+                  "https://github.com/veripublica/sigil-plugins/releases/tag/"
+                  "epubveri-v99.0.0")
+
+    def test_latest_json_names_this_plugins_own_version(self):
+        """`latest.json` is bumped in the same release commit as
+        `plugin.xml`. If the two disagree, either every user is told about a
+        release that is not out, or nobody is told about one that is."""
+        with open(os.path.join(ROOT, "latest.json"), encoding="utf-8") as h:
+            self.assertEqual(plugin_release.read_latest(h.read()),
+                             plugin._plugin_version())
+
+
+class PluginReleaseRunTests(unittest.TestCase):
+    """Where the notice appears: in the summary line, next to the verdict,
+    and in a window after the report."""
+
+    def setUp(self):
+        path = _binary()
+        if path is None:
+            self.skipTest("no epubveri binary; set EPUBVERI_BINARY")
+        self._orig = (plugin._binary_path, release_dialog.launch,
+                      release_dialog.available)
+        plugin._binary_path = lambda: path
+        # A real window would wait for a click that never comes.
+        self.asked = []
+        release_dialog.available = lambda: True
+        release_dialog.launch = lambda *a: self.asked.append(a) or True
+
+    def tearDown(self):
+        (plugin._binary_path, release_dialog.launch,
+         release_dialog.available) = self._orig
+
+    def test_the_window_is_started_after_the_report(self):
+        bk = FakeBk({"latest_plugin_version": "99.0.0"})
+        seen = []
+        release_dialog.launch = lambda *a: seen.append(len(bk.results)) or True
+        run_capturing(bk)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0], len(bk.results),
+                         "the window started before the results were added")
+
+    def test_an_ignored_release_is_not_in_the_summary(self):
+        _code, texts, out = run_capturing(
+            FakeBk({"latest_plugin_version": "99.0.0",
+                    "ignored_plugin_version": "99.0.0"}))
+        self.assertNotIn("is available", summary_of(texts, out))
+        self.assertEqual(self.asked, [])
+
+    def test_a_newer_release_is_named_in_the_summary(self):
+        _code, texts, out = run_capturing(
+            FakeBk({"latest_plugin_version": "99.0.0"}))
+        self.assertIn("[epubveri for Sigil 99.0.0 is available: "
+                      "https://github.com/veripublica/sigil-plugins/releases/"
+                      "tag/epubveri-v99.0.0]", summary_of(texts, out))
+
+    def test_the_installed_release_says_nothing(self):
+        _code, texts, out = run_capturing(
+            FakeBk({"latest_plugin_version": plugin._plugin_version()}))
+        self.assertNotIn("is available", summary_of(texts, out))
+
+    def test_the_notice_never_adds_a_row(self):
+        """A row of its own would make a clean book abort Sigil's automation
+        lists; the notice may only ride on the summary."""
+        plain, noticed = FakeBk(), FakeBk({"latest_plugin_version": "99.0.0"})
+        run_capturing(plain)
+        run_capturing(noticed)
+        self.assertEqual(len(plain.results), len(noticed.results))
+
+
+class ReleaseWindowTests(unittest.TestCase):
+    """When the window is started, and what each answer leaves behind.
+
+    The window opens from a detached process after the plugin has exited, so
+    Sigil's results come first (Baris, 2026-11-19: a window opened by the
+    plugin itself sat behind Sigil's Plugin Runner). `launch` is replaced
+    here; the window itself can only be judged by looking at it in Sigil."""
+
+    def setUp(self):
+        self._orig = (release_dialog.launch, release_dialog.available)
+        self.launched = []
+        self.started = True
+        release_dialog.available = lambda: True
+
+        def launch(latest, current, url, prefs_path):
+            self.launched.append((latest, current, url, prefs_path))
+            return self.started
+        release_dialog.launch = launch
+
+    def tearDown(self):
+        release_dialog.launch, release_dialog.available = self._orig
+
+    def _offer(self, prefs, automate=False):
+        bk = FakeBk(prefs)
+        bk.using_automate = lambda: automate
+        plugin._offer_plugin_release(bk)
+        return bk
+
+    def test_a_newer_release_starts_the_window_with_its_page(self):
+        bk = self._offer({"latest_plugin_version": "99.0.0"})
+        self.assertEqual(self.launched, [(
+            "99.0.0", plugin._plugin_version(),
+            "https://github.com/veripublica/sigil-plugins/releases/tag/"
+            "epubveri-v99.0.0", None)])
+        self.assertIn("plugin_notice_shown", bk.prefs,
+                      "recorded before the window opens, so a second run "
+                      "while it is open does not start another")
+
+    def test_the_settings_file_is_handed_to_the_window(self):
+        class SigilPrefs(dict):
+            file_path = "/prefs/epubveri.json"
+        bk = FakeBk()
+        prefs = SigilPrefs(bk.prefs, latest_plugin_version="99.0.0")
+        bk.prefs = prefs
+        plugin._offer_plugin_release(bk)
+        self.assertEqual(self.launched[0][3], "/prefs/epubveri.json")
+
+    def test_nothing_starts_without_a_newer_release(self):
+        self._offer({})
+        self._offer({"latest_plugin_version": plugin._plugin_version()})
+        self._offer({"latest_plugin_version": "99.0.0",
+                     "ignored_plugin_version": "99.0.0"})
+        self.assertEqual(self.launched, [])
+
+    def test_nothing_starts_in_an_automate_list(self):
+        """A window there stops the list until someone clicks it."""
+        bk = self._offer({"latest_plugin_version": "99.0.0"}, automate=True)
+        self.assertEqual(self.launched, [])
+        self.assertNotIn("plugin_notice_shown", bk.prefs)
+
+    def test_a_sigil_without_automation_is_not_in_one(self):
+        bk = FakeBk({"latest_plugin_version": "99.0.0"})   # no using_automate
+        plugin._offer_plugin_release(bk)
+        self.assertEqual(len(self.launched), 1)
+
+    def test_at_most_once_a_day(self):
+        recent = (_now() - timedelta(hours=3)).isoformat()
+        self._offer({"latest_plugin_version": "99.0.0",
+                     "plugin_notice_shown": recent})
+        self.assertEqual(self.launched, [], "shown again within the day")
+        old = (_now() - timedelta(days=2)).isoformat()
+        self._offer({"latest_plugin_version": "99.0.0",
+                     "plugin_notice_shown": old})
+        self.assertEqual(len(self.launched), 1)
+
+    def test_no_qt_or_no_start_records_nothing(self):
+        """Nothing was shown, so nothing may be recorded as shown; the
+        summary note carries on alone."""
+        release_dialog.available = lambda: False
+        bk = self._offer({"latest_plugin_version": "99.0.0"})
+        self.assertEqual(self.launched, [])
+        self.assertNotIn("plugin_notice_shown", bk.prefs)
+
+        release_dialog.available = lambda: True
+        self.started = False
+        bk = self._offer({"latest_plugin_version": "99.0.0"})
+        self.assertNotIn("plugin_notice_shown", bk.prefs)
+
+    def test_a_failing_start_does_not_raise(self):
+        def broken(*_a):
+            raise OSError("no such interpreter")
+        release_dialog.launch = broken
+        self._offer({"latest_plugin_version": "99.0.0"})   # must not raise
+
+
+class ReleaseDialogProcessTests(unittest.TestCase):
+    """The detached process: how it is started, and what it writes."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.prefs_path = os.path.join(self.tmp, "epubveri.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_it_is_detached_and_holds_none_of_sigils_pipes(self):
+        """Sigil reads the plugin's output through pipes; a child that kept
+        them open would keep Sigil waiting for a plugin that has finished."""
+        import subprocess
+        seen = {}
+
+        class FakePopen(object):
+            def __init__(self, args, **kwargs):
+                seen["args"], seen["kwargs"] = args, kwargs
+        real = subprocess.Popen
+        subprocess.Popen = FakePopen
+        try:
+            self.assertTrue(release_dialog.launch(
+                "99.0.0", "0.3.5", "https://x", self.prefs_path))
+        finally:
+            subprocess.Popen = real
+        kwargs = seen["kwargs"]
+        for stream in ("stdin", "stdout", "stderr"):
+            self.assertIs(kwargs[stream], subprocess.DEVNULL, stream)
+        if os.name == "nt":
+            self.assertTrue(kwargs["creationflags"])
+        else:
+            self.assertTrue(kwargs["start_new_session"])
+        args = seen["args"]
+        self.assertEqual(args[0], sys.executable)
+        self.assertTrue(args[1].endswith("release_dialog.py"))
+        self.assertEqual(args[2:], [str(os.getpid()), "99.0.0", "0.3.5",
+                                    "https://x", self.prefs_path])
+
+    def test_ignore_is_written_in_sigils_format_and_keeps_the_rest(self):
+        import json
+        with open(self.prefs_path, "w", encoding="utf-8") as handle:
+            json.dump({"autoupdate": True, "sort": "document",
+                       "note": "çalışıyor"}, handle, indent=2,
+                      ensure_ascii=False)
+        self.assertTrue(release_dialog.record_ignore(self.prefs_path,
+                                                     "99.0.0"))
+        with open(self.prefs_path, encoding="utf-8") as handle:
+            text = handle.read()
+        prefs = json.loads(text)
+        self.assertEqual(prefs["ignored_plugin_version"], "99.0.0")
+        self.assertEqual(prefs["sort"], "document")
+        self.assertIn("çalışıyor", text, "written with ensure_ascii=False")
+        self.assertEqual(os.listdir(self.tmp), ["epubveri.json"],
+                         "the temporary file was left behind")
+
+    def test_an_unreadable_settings_file_is_left_alone(self):
+        self.assertFalse(release_dialog.record_ignore(None, "99.0.0"))
+        self.assertFalse(release_dialog.record_ignore(self.prefs_path,
+                                                      "99.0.0"))
+        with open(self.prefs_path, "w", encoding="utf-8") as handle:
+            handle.write("{not json")
+        self.assertFalse(release_dialog.record_ignore(self.prefs_path,
+                                                      "99.0.0"))
+        with open(self.prefs_path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "{not json")
+
+    def test_main_waits_asks_and_records_only_ignore(self):
+        import json
+        real = (release_dialog._wait_for_exit, release_dialog.ask)
+        waited = []
+        release_dialog._wait_for_exit = waited.append
+        try:
+            for answer, recorded in ((release_dialog.IGNORE, True),
+                                     (release_dialog.DOWNLOAD, False),
+                                     (release_dialog.LATER, False),
+                                     (None, False)):
+                with open(self.prefs_path, "w", encoding="utf-8") as handle:
+                    json.dump({"autoupdate": True}, handle)
+                release_dialog.ask = lambda *_a: answer
+                self.assertEqual(release_dialog.main(
+                    ["4242", "99.0.0", "0.3.5", "https://x",
+                     self.prefs_path]), 0)
+                with open(self.prefs_path, encoding="utf-8") as handle:
+                    prefs = json.load(handle)
+                self.assertEqual("ignored_plugin_version" in prefs, recorded,
+                                 answer)
+        finally:
+            release_dialog._wait_for_exit, release_dialog.ask = real
+        self.assertEqual(waited, [4242] * 4)
+
+    def test_main_refuses_malformed_arguments(self):
+        self.assertEqual(release_dialog.main(["not-a-pid", "a", "b", "c",
+                                              "d"]), 2)
+        self.assertEqual(release_dialog.main([]), 2)
+
+    def test_a_finished_process_is_not_alive(self):
+        import subprocess
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        self.assertFalse(release_dialog._alive(proc.pid))
+        self.assertTrue(release_dialog._alive(os.getpid()))
+
+    def test_the_key_matches_the_plugins(self):
+        self.assertEqual(release_dialog.IGNORED_KEY,
+                         plugin._IGNORED_PLUGIN_KEY)
+
+    def test_ask_answers_none_when_there_is_no_qt(self):
+        real = release_dialog._qt
+        release_dialog._qt = lambda: None
+        try:
+            self.assertIsNone(release_dialog.ask("99.0.0", "0.3.5",
+                                                 "https://x"))
+        finally:
+            release_dialog._qt = real
 
 
 class IconTests(unittest.TestCase):

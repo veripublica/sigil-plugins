@@ -92,7 +92,7 @@ def asset_name(triple=None):
 def _get(url, timeout=NETWORK_TIMEOUT):
     request = Request(url, headers={
         # GitHub asks for a User-Agent and answers 403 without one.
-        "User-Agent": "epubveri-plugins",
+        "User-Agent": "sigil-plugins",
         "Accept": "application/vnd.github+json",
     })
     with urlopen(request, timeout=timeout) as response:
