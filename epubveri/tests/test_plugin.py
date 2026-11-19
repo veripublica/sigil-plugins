@@ -1312,6 +1312,19 @@ class PluginReleaseTests(unittest.TestCase):
                   "https://github.com/veripublica/sigil-plugins/releases/tag/"
                   "epubveri-v99.0.0")
 
+    def test_the_readme_table_offers_this_version(self):
+        """The root README's download table is how people find the zip, and
+        it is bumped in the same release commit as plugin.xml and
+        latest.json. A stale row sends people to an older release."""
+        version = plugin._plugin_version()
+        base = "https://github.com/veripublica/sigil-plugins/releases/"
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as h:
+            readme = h.read()
+        for wanted in ("[%s](%stag/%s-v%s)" % (version, base, 'epubveri', version),
+                       "%sdownload/%s-v%s/%s_sigil_v%s.zip"
+                       % (base, 'epubveri', version, 'epubveri', version)):
+            self.assertIn(wanted, readme)
+
     def test_latest_json_names_this_plugins_own_version(self):
         """`latest.json` is bumped in the same release commit as
         `plugin.xml`. If the two disagree, either every user is told about a

@@ -394,8 +394,13 @@ drawn with the tick's stroke.
 Each plugin is released on its own. There are no workflows; the tag and the
 GitHub release are made by hand.
 
-1. Bump the version in `<plugin>/plugin.xml` and in that plugin's entry in
-   `latest.json`, in the same commit. A test fails if they differ.
+1. Bump the version in three places, in the same commit:
+   - `<plugin>/plugin.xml`;
+   - the plugin's entry in `latest.json`;
+   - the plugin's row in the root `README.md` download table: the version,
+     the release link and the direct zip link.
+
+   Each plugin's tests fail if any of the three differ.
 2. In `<plugin>/CHANGELOG.md`, turn `## [Unreleased]` into
    `## [X.Y.Z] — YYYY-MM-DD`.
 3. Run the tests, build, and check the zip with `unzip -l`. Write a one-line

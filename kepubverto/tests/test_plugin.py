@@ -462,6 +462,19 @@ class BinaryTests(unittest.TestCase):
 
 
 class ReleaseNoticeTests(unittest.TestCase):
+    def test_the_readme_table_offers_this_version(self):
+        """The root README's download table is how people find the zip, and
+        it is bumped in the same release commit as plugin.xml and
+        latest.json. A stale row sends people to an older release."""
+        version = plugin._plugin_version()
+        base = "https://github.com/veripublica/sigil-plugins/releases/"
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as h:
+            readme = h.read()
+        for wanted in ("[%s](%stag/%s-v%s)" % (version, base, 'kepubverto', version),
+                       "%sdownload/%s-v%s/%s_sigil_v%s.zip"
+                       % (base, 'kepubverto', version, 'kepubverto', version)):
+            self.assertIn(wanted, readme)
+
     def test_latest_json_names_this_plugins_own_version(self):
         with open(os.path.join(ROOT, "latest.json"), encoding="utf-8") as h:
             self.assertEqual(plugin_release.read_latest(h.read()),

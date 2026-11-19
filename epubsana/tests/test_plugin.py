@@ -417,6 +417,19 @@ class ReleaseNoticeTests(unittest.TestCase):
             "https://github.com/veripublica/sigil-plugins/releases/tag/"
             "epubsana-v0.2.0")
 
+    def test_the_readme_table_offers_this_version(self):
+        """The root README's download table is how people find the zip, and
+        it is bumped in the same release commit as plugin.xml and
+        latest.json. A stale row sends people to an older release."""
+        version = plugin._plugin_version()
+        base = "https://github.com/veripublica/sigil-plugins/releases/"
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as h:
+            readme = h.read()
+        for wanted in ("[%s](%stag/%s-v%s)" % (version, base, 'epubsana', version),
+                       "%sdownload/%s-v%s/%s_sigil_v%s.zip"
+                       % (base, 'epubsana', version, 'epubsana', version)):
+            self.assertIn(wanted, readme)
+
     def test_latest_json_entry_when_released(self):
         """`latest.json` gains this plugin's entry in its release commit;
         until then the entry may be absent, never wrong."""
