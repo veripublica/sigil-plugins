@@ -14,12 +14,11 @@ settings, the results panel, Automate lists) serves every plugin here.
 |---|---|---|---|---|
 | `epubveri/` | epubveri for Sigil | [epubveri](https://github.com/veripublica/epubveri), an EPUB validator | `epubveri-vX.Y.Z` | 374939 |
 | `kepubverto/` | kepubverto for Sigil | [kepubverto](https://github.com/veripublica/kepubverto), EPUB to KEPUB for Kobo | `kepubverto-vX.Y.Z` | 376360 |
+| `epubsana/` | epubsana for Sigil | [epubsana](https://github.com/veripublica/epubsana), an EPUB repairer | `epubsana-vX.Y.Z` | not yet |
 
 epubveri for Sigil moved here from
 [epubveri-plugins](https://github.com/veripublica/epubveri-plugins) at 0.3.5.
 Its releases up to 0.3.4 (tags `sigil-v…`) and its history stay there.
-A plugin for epubsana (an edit plugin, since it repairs the book) is planned.
-
 Each plugin's type follows what its tool does to the book: a validator is a
 `validation` plugin, a converter that writes a new file is an `output`
 plugin, and a tool that changes the book itself is an `edit` plugin.
@@ -167,6 +166,7 @@ taking the version from `plugin.xml`.
 ```
 LICENSE  README.md  AGENTS.md  latest.json
 kepubverto/           see "kepubverto for Sigil"
+epubsana/             see "epubsana for Sigil"
 epubveri/
   plugin.xml          name, version, type, engine, oslist
   plugin.py           run(bk): binary, validation, panel rows, summary
@@ -284,6 +284,109 @@ can only be judged in Sigil.
 
 The icon is epubveri for Sigil's sheet with kepubverto for calibre's k (KF
 Libron Bold, OFL 1.1, kept as outline data) in place of the tick.
+
+## epubsana for Sigil
+
+An edit plugin (`<type>edit</type>`). epubsana repairs the book Sigil holds,
+and the repair is written into Sigil whole, or not at all.
+
+### Flow
+
+1. Ensure the binary, as the other plugins do:
+   - from `veripublica/epubsana` releases, verified, with an hourly update
+     check that also reads `latest.json`;
+   - epubsana 0.42.0 or newer.
+2. `copy_book_contents_to` into a temporary folder, zipped with `mimetype`
+   first and stored, then:
+
+   ```
+   epubsana -i before.epub --dry-run --format json
+   ```
+
+   The plan's items carry `data.index`, `fix_id`, `tier` and `changes`.
+   `NOT_IN_SIGIL` in `plugin.py` lists the fixes shown greyed out, with the
+   reason:
+   - `fix.package_version`: Sigil's wrapper refuses a version change;
+   - `fix.html_media_type`, `fix.image_media_type`,
+     `fix.non_preferred_media_type`: Sigil has no call for media-type;
+   - `fix.manifest_href_spaces`, `fix.mimetype_packaging`,
+     `fix.empty_directory`: Sigil writes these itself.
+3. The choice:
+   - `client/ui.py` ticks `auto_safe` and leaves `confirm_needed` unticked;
+   - in an Automate list (`bk.using_automate()`), or without Qt, the
+     `auto_safe` fixes are chosen with no window.
+4. Apply exactly the chosen fixes. epubsana re-validates and reverts a fix
+   that raised any `(id, rule)` count.
+
+   ```
+   epubsana -i before.epub -o fixed.epub --apply <indices> --format json
+   ```
+
+5. `client/writeback.py` `plan()` compares the two books and maps every
+   difference to a container call:
+   - a changed manifest file: `writefile`;
+   - a changed non-manifest file: `writeotherfile`;
+   - a removed manifest item: `deletefile`;
+   - the OPF, read on both sides by **Sigil's own `opf_parser.Opf_Parser`**:
+     `setmetadataxml`, `setspine` / `setspine_epub3`, `setspine_ppd`,
+     `setguide`, `setbindings_epub3`, `setpackagetag`, and
+     `set_manifest_epub3_attributes` (EPUB 3 only).
+
+   Any other difference raises `Unmappable` before a call is made: a new
+   file, a moved file, a media-type or version change, or an EPUB 3
+   attribute in EPUB 2.
+6. `apply()`, then `copy_book_contents_to` again. `verify()` compares every
+   file byte for byte and the OPF as Sigil models it. A second `--dry-run`
+   on the read-back must give the repair's `*_after` counts.
+
+   Any difference, or an exception from Sigil, returns non-zero.
+   `launcher.py` then writes `<result>failed</result>` with an empty
+   `<changes/>` and no OPF, so Sigil takes nothing from the run.
+7. Report: the counts before and after, the applied and reverted fixes, and
+   the files written. The book is left unsaved in Sigil.
+
+### Facts about Sigil this rests on
+
+Measured on Sigil 2.8.6 through its own `launcher.py`:
+
+- `readfile` returns a plugin-written file from the out folder.
+  `copy_book_contents_to` returns `build_opf()` once the OPF is modified. So
+  the read-back is what Sigil will hold.
+- Sigil's `Opf_Parser` reads `text/html` as `application/xhtml+xml`, and
+  Sigil rewrites the OPF when it opens a book. So the media-type, href and
+  container fixes either never come up or change nothing in Sigil.
+
+### Settings
+
+`<Sigil preferences>/plugins_prefs/epubsana/epubsana.json`: `autoupdate`
+(default `true`; only `true`, `yes`, `on`, `1` and `y` mean on), and the
+bookkeeping keys of the other plugins, with the same names.
+
+### Layout and tests
+
+```
+epubsana/
+  plugin.xml  plugin.py  icon.py  plugin.svg  plugin.png  build.py
+  client/
+    binary.py  plugin_release.py  release_dialog.py   copies of kepubverto for Sigil's
+    envelope.py  runner.py                            epubsana's report, its two command lines
+    writeback.py                                      the repair into Sigil, and its verification
+    ui.py                                             the plan and result windows
+  tests/
+    test_plugin.py    envelope, commands, plan split, writeback against Sigil's Opf_Parser, run()
+    test_in_sigil.py  the Automate path through Sigil's own launcher.py, edit type
+```
+
+```sh
+EPUBSANA_BINARY=/path/to/epubsana python3 -m unittest discover -s epubsana/tests
+```
+
+30 tests at 0.1.0. Without Sigil, the `Opf_Parser` and launcher tests skip;
+without a binary, the tests that run epubsana skip. The windows can only be
+judged in Sigil.
+
+The icon is epubveri for Sigil's sheet, with a plus in place of the tick,
+drawn with the tick's stroke.
 
 ## Releasing
 

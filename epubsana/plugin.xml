@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin>
+<name>epubsana</name>
+<type>edit</type>
+<author>Baris Kayadelen (veripublica)</author>
+<description>Repair the current book with epubsana: you choose the fixes, and the repair is checked before Sigil takes it.</description>
+<autostart>true</autostart>
+<engine>python3.4</engine>
+<version>0.1.0</version>
+<oslist>unx,win,osx</oslist>
+</plugin>

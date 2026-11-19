@@ -9,7 +9,9 @@ epubveri for Sigil checks the book against the EPUB specification with
 Sigil's validation panel, where a click takes you to the line. kepubverto for
 Sigil saves a copy of the book as a KEPUB for Kobo readers with
 [kepubverto](https://github.com/veripublica/kepubverto). Neither changes the
-book you are editing. A plugin for my repair tool will join them here.
+book you are editing. epubsana for Sigil repairs the book with
+[epubsana](https://github.com/veripublica/epubsana): you choose the fixes,
+and Sigil takes the repair only after it has been checked.
 
 To install one, download its zip from
 [Releases](https://github.com/veripublica/sigil-plugins/releases) and add it
@@ -25,7 +27,8 @@ epubveri 0.47.0 (plugin 0.3.5) — NOT VALID (2 error(s), 0 warning(s))
 ```
 
 Each plugin's own README ([epubveri](epubveri/README.md),
-[kepubverto](kepubverto/README.md)) explains its settings, and
+[kepubverto](kepubverto/README.md), [epubsana](epubsana/README.md))
+explains its settings, and
 [AGENTS.md](AGENTS.md) has the technical detail. You can report problems in
 [Issues](https://github.com/veripublica/sigil-plugins/issues), and for
 epubveri also in its
